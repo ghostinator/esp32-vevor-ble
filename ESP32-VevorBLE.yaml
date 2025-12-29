@@ -87,6 +87,19 @@ text_sensor:
     name: "Heater Mode"
     icon: "mdi:thermometer"
 
+
+  - platform: version
+    hide_timestamp: true
+    name: 'ESPHome Version'
+
+  - platform: wifi_info
+    ip_address:
+      name: 'IP Address'
+      icon: mdi:wifi
+    ssid:
+      name: 'Connected SSID'
+      icon: mdi:wifi-strength-2
+
 binary_sensor:
   - platform: template
     id: heater_status
@@ -284,6 +297,10 @@ sensor:
 
       // must return a float
       return 0;
+
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    update_interval: 120s
 
 # Switches
 switch:
