@@ -265,12 +265,16 @@ sensor:
           id(heating_temperature).publish_state(shellTemp);
           id(error_code).publish_state(errcode);
           id(heater_status).publish_state(onOff > 0);
+          id(heater_level).publish_state(runG);
+          id(heater_temperature).publish_state(runT);
 
           // Optional text sensors / states
           if (runMode == 1) {
             id(heater_mode_text).publish_state("Level");
+            id(heater_mode).publish_state("Level");
           } else if (runMode == 2) {
             id(heater_mode_text).publish_state("Automatic");
+            id(heater_mode).publish_state("Automatic");
           } else {
             id(heater_mode_text).publish_state("Unknown");
           }
