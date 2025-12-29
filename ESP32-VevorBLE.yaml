@@ -87,6 +87,10 @@ text_sensor:
     name: "Heater Mode"
     icon: "mdi:thermometer"
 
+  - platform: template
+    id: temp_unit
+    name: "Temperature Unit"
+    icon: "mdi:thermometer"
 
   - platform: version
     hide_timestamp: true
@@ -209,10 +213,14 @@ sensor:
           // --- Shell / Room temp ---
           float shellTemp = S16(13, 14);
           float roomTemp = S16(32, 33) / 10.0f;
-          //if (tempUnit == 1) {
+          if (tempUnit == 1) {
+              id(temp_unit).publish_state("F");
+              runT = roundf((runT - 32) * 5 / 9);
           //  shellTemp = 1.8f * shellTemp + 32;
           //  roomTemp  = 1.8f * roomTemp + 32;
-          //}
+          } else {
+              id(temp_unit).publish_state("C");
+          }
 
           // --- Timing and auto ---
           int startTime = 256 * U8(19) + U8(20);
@@ -361,11 +369,11 @@ select:
       - "Automatic"
     initial_option: "Level"
     optimistic: true
-    on_value:
+    set_action:
       then:
         - if:
             condition:
-              lambda: 'return id(heater_mode).state == "Level";'
+              lambda: 'return id(heater_mode).state == "Automatic";'
             then:
               - logger.log: "Heater mode set to LEVEL"
               - ble_client.ble_write:
@@ -416,24 +424,28 @@ number:
     optimistic: true
     set_action:
       then:
-        - logger.log: "Switching to AUTOMATIC mode..."
-        - ble_client.ble_write:
-            id: heater_ble
-            service_uuid: "0000FFE0-0000-1000-8000-00805F9B34FB"
-            characteristic_uuid: "0000FFE1-0000-1000-8000-00805F9B34FB"
-            value: !lambda |-
-              int pk = id(heater_passkey);
-              uint8_t pass_hi = pk / 100;
-              uint8_t pass_lo = pk % 100;
-              uint8_t cmd = 0x02;
-              uint8_t data_low = 0x02;
-              uint8_t data_high = 0x00;
-              uint8_t checksum = (pass_hi + pass_lo + cmd + data_low + data_high) & 0xFF;
+        - if:
+            condition:
+              lambda: 'return id(heater_mode).state != "Automatic";'
+            then:
+              - logger.log: "Switching to AUTOMATIC mode..."
+              - ble_client.ble_write:
+                  id: heater_ble
+                  service_uuid: "0000FFE0-0000-1000-8000-00805F9B34FB"
+                  characteristic_uuid: "0000FFE1-0000-1000-8000-00805F9B34FB"
+                  value: !lambda |-
+                    int pk = id(heater_passkey);
+                    uint8_t pass_hi = pk / 100;
+                    uint8_t pass_lo = pk % 100;
+                    uint8_t cmd = 0x02;
+                    uint8_t data_low = 0x02;
+                    uint8_t data_high = 0x00;
+                    uint8_t checksum = (pass_hi + pass_lo + cmd + data_low + data_high) & 0xFF;
 
-              std::vector<uint8_t> payload = {0xAA, 0x55, pass_hi, pass_lo, cmd, data_low, data_high, checksum};
-              ESP_LOGI("BLE", "send mode=auto: %s", format_hex_pretty(payload).c_str());
-              return payload;
-        - delay: 1s
+                    std::vector<uint8_t> payload = {0xAA, 0x55, pass_hi, pass_lo, cmd, data_low, data_high, checksum};
+                    ESP_LOGI("BLE", "send mode=auto: %s", format_hex_pretty(payload).c_str());
+                    return payload;
+              - delay: 1s
 
         # Send temperature setpoint (CMD=0x04)
         - ble_client.ble_write:
@@ -441,17 +453,27 @@ number:
             service_uuid: "0000FFE0-0000-1000-8000-00805F9B34FB"
             characteristic_uuid: "0000FFE1-0000-1000-8000-00805F9B34FB"
             value: !lambda |-
-              uint8_t temp = (uint8_t)id(heater_temperature).state;
+              uint8_t temp = (uint8_t)x;
+              uint8_t adjusted;
+
+              if (id(temp_unit).state == "F") {
+                  adjusted = (uint8_t)roundf(temp * 9.0f / 5.0f + 32.0f);
+                  ESP_LOGI("TEMP", "C=%d, Unit=F, sending %d°F", temp, adjusted);
+              } else {
+                  adjusted = temp;
+                  ESP_LOGI("TEMP", "C=%d, Unit=C, sending %d°C", temp, adjusted);
+              }
+
               int pk = id(heater_passkey);
               uint8_t pass_hi = pk / 100;
               uint8_t pass_lo = pk % 100;
               uint8_t cmd = 0x04;
-              uint8_t data_low = temp;
+              uint8_t data_low = adjusted;
               uint8_t data_high = 0x00;
               uint8_t checksum = (pass_hi + pass_lo + cmd + data_low + data_high) & 0xFF;
 
               std::vector<uint8_t> payload = {0xAA, 0x55, pass_hi, pass_lo, cmd, data_low, data_high, checksum};
-              ESP_LOGI("BLE", "send temp=%d: %s", temp, format_hex_pretty(payload).c_str());
+              ESP_LOGI("BLE", "send temp=%d: %s", adjusted, format_hex_pretty(payload).c_str());
               return payload;
 
   # Level Setpoint (Level Mode)
@@ -466,25 +488,28 @@ number:
     optimistic: true
     set_action:
       then:
-        # Switch to Level mode
-        - logger.log: "Switching to LEVEL mode..."
-        - ble_client.ble_write:
-            id: heater_ble
-            service_uuid: "0000FFE0-0000-1000-8000-00805F9B34FB"
-            characteristic_uuid: "0000FFE1-0000-1000-8000-00805F9B34FB"
-            value: !lambda |-
-              int pk = id(heater_passkey);
-              uint8_t pass_hi = pk / 100;
-              uint8_t pass_lo = pk % 100;
-              uint8_t cmd = 0x02;
-              uint8_t data_low = 0x01;
-              uint8_t data_high = 0x00;
-              uint8_t checksum = (pass_hi + pass_lo + cmd + data_low + data_high) & 0xFF;
+        - if:
+            condition:
+              lambda: 'return id(heater_mode).state != "Level";'
+            then:
+              - logger.log: "Switching to LEVEL mode..."
+              - ble_client.ble_write:
+                  id: heater_ble
+                  service_uuid: "0000FFE0-0000-1000-8000-00805F9B34FB"
+                  characteristic_uuid: "0000FFE1-0000-1000-8000-00805F9B34FB"
+                  value: !lambda |-
+                    int pk = id(heater_passkey);
+                    uint8_t pass_hi = pk / 100;
+                    uint8_t pass_lo = pk % 100;
+                    uint8_t cmd = 0x02;
+                    uint8_t data_low = 0x01;
+                    uint8_t data_high = 0x00;
+                    uint8_t checksum = (pass_hi + pass_lo + cmd + data_low + data_high) & 0xFF;
 
-              std::vector<uint8_t> payload = {0xAA, 0x55, pass_hi, pass_lo, cmd, data_low, data_high, checksum};
-              ESP_LOGI("BLE", "send mode=level: %s", format_hex_pretty(payload).c_str());
-              return payload;
-        - delay: 1s
+                    std::vector<uint8_t> payload = {0xAA, 0x55, pass_hi, pass_lo, cmd, data_low, data_high, checksum};
+                    ESP_LOGI("BLE", "send mode=level: %s", format_hex_pretty(payload).c_str());
+                    return payload;
+              - delay: 1s
 
         # Send level setpoint (CMD=0x04)
         - ble_client.ble_write:
@@ -492,7 +517,7 @@ number:
             service_uuid: "0000FFE0-0000-1000-8000-00805F9B34FB"
             characteristic_uuid: "0000FFE1-0000-1000-8000-00805F9B34FB"
             value: !lambda |-
-              uint8_t level = (uint8_t)id(heater_level).state;
+              uint8_t level = (uint8_t)x;
               int pk = id(heater_passkey);
               uint8_t pass_hi = pk / 100;
               uint8_t pass_lo = pk % 100;
