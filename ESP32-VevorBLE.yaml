@@ -193,14 +193,21 @@ sensor:
     type: characteristic
     id: ble_master_receiver
     ble_client_id: heater_ble
-    service_uuid: "0000ffe0-0000-1000-8000-00805f9b34fb"
-    characteristic_uuid: "0000ffe1-0000-1000-8000-00805f9b34fb"
+    service_uuid: "FFE0"
+    characteristic_uuid: "FFE1"
     notify: true
     name: "Heater Raw Mode"
     accuracy_decimals: 0
     lambda: |-
+      // FIX: Ignore the massive 128-byte "ghost" packets to prevent HA errors
+      if (x.size() > 25) {
+        return 0.0;
+      }
+
       std::string hex_str = format_hex_pretty(x);
+      // Log it
       ESP_LOGD("HEATER", "Rx: %s", hex_str.c_str());
+      // Update text sensor (Now safe because it's short)
       id(last_packet_hex).publish_state(hex_str);
 
       // Check for valid header (AA 66) AND ACCEPT 20 BYTES
@@ -209,7 +216,7 @@ sensor:
         uint8_t onOff = x[3];
         uint8_t errcode = x[4];
         uint8_t runStep = x[5];
-        uint8_t runMode = x[8]; // 01 = Level, 02 = Auto
+        uint8_t runMode = x[8];
         
         // Little Endian Math (Low Byte + High Byte * 256)
         float voltage = (float)(x[11] + (x[12] * 256)) / 10.0f;
@@ -222,7 +229,7 @@ sensor:
         uint8_t tempUnit = 0;
         if (x.size() > 27) tempUnit = x[27] & 0x0F;
 
-        // --- Update Numeric Sensors ---
+        // --- Update Template Sensors ---
         id(battery_voltage).publish_state(voltage);
         id(altitude).publish_state(altitude_val);
         id(room_temperature).publish_state(roomTemp);
@@ -237,24 +244,20 @@ sensor:
         // --- Handle Mode Text Explicitly ---
         if (runMode == 0x01) {
             id(heater_mode_text).publish_state("Level");
-            ESP_LOGD("HEATER", "Mode: Level");
         } 
         else if (runMode == 0x02) {
             id(heater_mode_text).publish_state("Automatic");
-            ESP_LOGD("HEATER", "Mode: Auto");
         } 
         else {
             id(heater_mode_text).publish_state("Standby");
         }
 
-        // --- Handle Units ---
         if (tempUnit == 1) {
             id(temp_unit).publish_state("F");
         } else {
             id(temp_unit).publish_state("C");
         }
 
-        // --- Handle Run State Text ---
         if (runStep == 2 || runStep == 3) {
           id(glow_plug_status).publish_state("Heating");
         } else if (runStep == 4) {
