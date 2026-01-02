@@ -133,9 +133,10 @@ This ESPHome configuration performs **bidirectional BLE communication** with the
 Many Vevor/Hcalory heaters have switched to a newer controller board (often Red or Black casing) that behaves differently than the older "Blue" boards.
 
 1.  **Packet Size:** The old boards sent 45+ bytes of data. The new boards send concise **20-byte** packets. Most existing scripts ignore these "short" packets, resulting in no data. This repo accepts `x.size() >= 20`.
-2.  **Byte Order:** The new boards send multi-byte data (Voltage, Temp, Altitude) in **Little Endian** format (Low Byte First). Older scripts read this as Big Endian, resulting in massive, incorrect values (e.g., 31,000 Volts). This repo correctly calculates `Low + (High * 256)`.
-3.  **Connection Stability:** This configuration uses Short UUIDs (`0xFFE0` / `0xFFE1`) rather than 128-bit UUIDs for the service definition, which improves connection reliability with these specific Chinese BLE chips.
-4.  **Decoder Method:** The decoding logic is placed inside a `sensor` lambda using `type: characteristic`. This ensures that every notification is processed immediately, bypassing some of the standard ESPHome sensor filters that can block non-compliant BLE frames.
+2.  **Ghost Packets (The "Home Assistant Crash" Fix):** Some controllers occasionally emit a massive **128-byte** packet filled with zeros. If passed to Home Assistant, this string exceeds the 255-character state limit, causing the sensor integration to crash with an error. This repo explicitly filters out any packet larger than 25 bytes to prevent this.
+3.  **Byte Order:** The new boards send multi-byte data (Voltage, Temp, Altitude) in **Little Endian** format (Low Byte First). Older scripts read this as Big Endian, resulting in massive, incorrect values (e.g., 31,000 Volts). This repo correctly calculates `Low + (High * 256)`.
+4.  **Connection Stability:** This configuration uses Short UUIDs (`0xFFE0` / `0xFFE1`) rather than 128-bit UUIDs for the service definition, which improves connection reliability with these specific Chinese BLE chips.
+5.  **Decoder Method:** The decoding logic is placed inside a `sensor` lambda using `type: characteristic`. This ensures that every notification is processed immediately, bypassing some of the standard ESPHome sensor filters that can block non-compliant BLE frames.
 
 # 🙏 Credits & Related Projects
 
