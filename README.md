@@ -1,24 +1,25 @@
-# ESPHome Vevor Diesel Heater BLE Controller
+# ESPHome Vevor/Hcalory Diesel Heater BLE Controller
 
-This project provides an **ESP32-based Bluetooth Low Energy (BLE)
-bridge** between a **Vevor diesel heater** and **Home Assistant**.
-It enables full control and telemetry via ESPHome while decoding the
-proprietary BLE frames emitted by the heater.
+This project provides an **ESP32-based Bluetooth Low Energy (BLE) bridge** between a **Vevor/Hcalory diesel heater** and **Home Assistant**. It enables full control and telemetry via ESPHome while decoding the proprietary BLE frames emitted by the heater.
+
+**Significant Fork Note:** This version has been specifically updated to support **newer "Black/Red" controller boards** that emit **20-byte Bluetooth packets**. The original code (and many other forks) expects 45-byte packets and fails to read data from these newer units (often showing 0 values). This version also fixes voltage/temperature decoding errors caused by Little Endian byte ordering.
 
 This repository contains the ESPHome YAML configuration that handles:
 
--   BLE connection and automatic polling
--   Full telemetry decoding (temperatures, voltage, altitude, modes, errors, etc.)
+-   BLE connection and automatic polling using 16-bit UUIDs for stability
+-   **Universal Telemetry Decoding:** Supports newer 20-byte frames (fixing the "Zero Data" bug) and standard 45-byte frames
+-   **Correct Math:** Little Endian decoding for Voltage, Temperature, and Altitude
 -   Power control, mode selection, setpoint control (temperature or level)
 -   Publishing all values and states to Home Assistant
 
-------------------------------------------------------------------------
+---
 
 # 🔧 Build & Installation Instructions
 
 ## 1. Install ESPHome
 
-You can use: - ESPHome Dashboard
+You can use:
+- ESPHome Dashboard
 - The `esphome` CLI
 - Home Assistant's ESPHome add-on
 
@@ -27,7 +28,7 @@ You can use: - ESPHome Dashboard
 
 A `secrets.example.yaml` file is included. Create your own `secrets.yaml` in the same folder:
 
-``` yaml
+```yaml
 mac_address: ""
 passkey: "1234"
 wifi_ssid: ""
@@ -38,14 +39,14 @@ ota_password: "09ec3c09b5847b5a4eeef2c15ce8fb00"
 
 ### Secret values:
 
-| Field                  | Description                                                                                       |
-| -----------------------|---------------------------------------------------------------------------------------------------|
-| **mac_address**        | Bluetooth MAC address of the heater. You can obtain this using any BLE scanner app on your phone. |
-| **passkey**            | The heater passkey set in the Vevor app. Default is **1234** unless changed.                      |
-| **wifi_ssid**          | Credentials for the network the ESP32 should join.                                                |
-| **wifi_password**      | Credentials for the network the ESP32 should join.                                                | 
-| **api_encryption_key** | ESPHome API encryption key used by Home Assistant.                                                |
-| **ota_password**       | Password required for over-the-air firmware updates.                                              |
+| Field | Description |
+| :--- | :--- |
+| **mac_address** | Bluetooth MAC address of the heater. You can obtain this using any BLE scanner app on your phone. |
+| **passkey** | The heater passkey set in the Vevor app. Default is **1234** unless changed. |
+| **wifi_ssid** | Credentials for the network the ESP32 should join. |
+| **wifi_password** | Credentials for the network the ESP32 should join. |
+| **api_encryption_key** | ESPHome API encryption key used by Home Assistant. |
+| **ota_password** | Password required for over-the-air firmware updates. |
 
 ### ⚠️ Important: Change Your API Encryption Key and OTA Password
 
@@ -54,13 +55,13 @@ They remain in place for ease of setup, but **should be replaced before deployin
 
 #### Generate a new API key:
 
-``` bash
+```bash
 openssl rand -base64 32
 ```
 
 #### Choose any strong OTA password:
 
-``` bash
+```bash
 openssl rand -hex 16
 ```
 
@@ -70,7 +71,7 @@ Update your `secrets.yaml` accordingly.
 
 Inside the YAML:
 
-``` yaml
+```yaml
 substitutions:
   name: bt-vevor_ble
   friendly_name: Diesel_Air_Heater
@@ -82,11 +83,13 @@ Modify these if you want your device to appear differently in Home Assistant.
 
 ### First-time USB flash:
 
-``` bash
+```bash
 esphome run vevor_ble.yaml
 ```
 
 After the ESP32 is flashed once, all future updates can be done **OTA** via WIFI.
+
+---
 
 # 📡 Features & Home Assistant Integration
 
@@ -94,20 +97,20 @@ This ESPHome configuration performs **bidirectional BLE communication** with the
 
 ## ✓ Controls Available
 
-| Control                     | Description                                     |
-|-----------------------------|-------------------------------------------------|
-| **Heater Power (On/Off)**   | Heater On/Off                                   |
-| **Mode Selection**          | Level mode or Automatic (temperature) mode.     |
-| **Level Setpoint**          | Sets output level 0--10 (Level mode).           |
-| **Temperature Setpoint**    | Sets target temperature in °C (Automatic mode). |
+| Control | Description |
+| :--- | :--- |
+| **Heater Power (On/Off)** | Heater On/Off |
+| **Mode Selection** | Level mode or Automatic (temperature) mode. |
+| **Level Setpoint** | Sets output level 1–10 (Level mode). |
+| **Temperature Setpoint** | Sets target temperature in °C (Automatic mode). |
 
 # 📊 Telemetry Decoding (Published to Home Assistant)
 
 ### Status Sensors
 
 -   **Heater Running** (binary_sensor)
--   **Heater Mode** ("Level" / "Automatic")
--   **Glow Plug Status** ("Heating", "Running", "Cooling Down", etc.)
+-   **Heater Mode** ("Level" / "Automatic" / "Standby")
+-   **Glow Plug Status** ("Heating", "Running", "Cooling Down", "Idle")
 -   **Error Code**
 
 ### Environmental / System Sensors
@@ -117,25 +120,27 @@ This ESPHome configuration performs **bidirectional BLE communication** with the
 -   **Battery Voltage (V)**
 -   **Altitude (m)**
 -   **Uptime**
+-   **WiFi Signal**
 
-### Device Metadata
+### Debugging Sensors
 
--   Part number
--   Motherboard firmware version
--   CO sensor active + PPM (if present)
--   Temperature & altitude units
--   Language broadcast by the controller
+-   **Last Hex Packet**: Shows the raw hex string of the last received Bluetooth packet. Useful for debugging new controller variants.
 
-### Raw BLE Data
+---
 
-One raw characteristic sensor exposes the **full decrypted frame** for
-debugging.
+# 🛠 Technical Details (Why this fork exists)
+
+Many Vevor/Hcalory heaters have switched to a newer controller board (often Red or Black casing) that behaves differently than the older "Blue" boards.
+
+1.  **Packet Size:** The old boards sent 45+ bytes of data. The new boards send concise **20-byte** packets. Most existing scripts ignore these "short" packets, resulting in no data. This repo accepts `x.size() >= 20`.
+2.  **Byte Order:** The new boards send multi-byte data (Voltage, Temp, Altitude) in **Little Endian** format (Low Byte First). Older scripts read this as Big Endian, resulting in massive, incorrect values (e.g., 31,000 Volts). This repo correctly calculates `Low + (High * 256)`.
+3.  **Connection Stability:** This configuration uses Short UUIDs (`0xFFE0` / `0xFFE1`) rather than 128-bit UUIDs for the service definition, which improves connection reliability with these specific Chinese BLE chips.
+4.  **Decoder Method:** The decoding logic is placed inside a `sensor` lambda using `type: characteristic`. This ensures that every notification is processed immediately, bypassing some of the standard ESPHome sensor filters that can block non-compliant BLE frames.
 
 # 🙏 Credits & Related Projects
 
-Huge thanks to the pioneers who decoded the heater protocol for
-older models:
+Huge thanks to the pioneers who decoded the heater protocol for older models:
 
--   https://github.com/spin877/Bruciatore_BLE
--   https://github.com/Knutnoh/Bruciatore_BLE
--   https://community.home-assistant.io/t/vevor-diesel-heater-control-development-in-progress/832159/14
+-   [https://github.com/spin877/Bruciatore_BLE](https://github.com/spin877/Bruciatore_BLE)
+-   [https://github.com/Knutnoh/Bruciatore_BLE](https://github.com/Knutnoh/Bruciatore_BLE)
+-   [https://community.home-assistant.io/t/vevor-diesel-heater-control-development-in-progress/832159/14](https://community.home-assistant.io/t/vevor-diesel-heater-control-development-in-progress/832159/14)
