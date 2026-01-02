@@ -144,3 +144,14 @@ Huge thanks to the pioneers who decoded the heater protocol for older models:
 -   [https://github.com/spin877/Bruciatore_BLE](https://github.com/spin877/Bruciatore_BLE)
 -   [https://github.com/Knutnoh/Bruciatore_BLE](https://github.com/Knutnoh/Bruciatore_BLE)
 -   [https://community.home-assistant.io/t/vevor-diesel-heater-control-development-in-progress/832159/14](https://community.home-assistant.io/t/vevor-diesel-heater-control-development-in-progress/832159/14)
+
+## Support and Donations
+
+If you find these scripts helpful and would like to support further development or simply show your appreciation, you can use the following donation addresses:
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/H2H25YLCS)
+* **PayPal:** brandon@ghostinator.co
+* **SOL:** AUyf3DxRL9uKWf7ePEjY5GhSL3XJtAqQZ2w7kUMLi1xS
+* **ETH, Monad, Base, Polygon:** 0x521E4D25212180B5f8A9f0261D00835EA3bd7fa6
+* **Sui:** 0x89844c9e0c509115e8d2747b02d230ceb2bf96a1246707416177457d0e1bb593e
+* **Bitcoin:** bc1qkljmuw3mexksnk0wg06p35xvhpkakgnhyp63la
